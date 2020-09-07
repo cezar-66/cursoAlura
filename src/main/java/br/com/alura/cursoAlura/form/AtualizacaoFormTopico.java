@@ -34,7 +34,6 @@ public class AtualizacaoFormTopico {
         Topico topico = topicoRepository.getOne(id);
         topico.setTitulo(this.titulo);
         topico.setMensagem(this.mensagem);
-
         return topico;
     }
 }

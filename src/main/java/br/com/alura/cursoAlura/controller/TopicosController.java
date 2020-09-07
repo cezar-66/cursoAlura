@@ -9,6 +9,12 @@ import br.com.alura.cursoAlura.repository.CursoRepository;
 import br.com.alura.cursoAlura.repository.TopicoRepository;
 import org.omg.CORBA.Any;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -16,7 +22,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 import javax.transaction.Transactional;
 import javax.validation.Valid;
 import java.net.URI;
-import java.util.List;
 import java.util.Optional;
 
 @RestController
@@ -30,27 +35,18 @@ public class TopicosController {
     private CursoRepository cursoRepository;
 
     @GetMapping
-    public List<TopicoDTO> listaTopicos(String nomeCurso){
+    @Cacheable(value = "listaTopicos")
+    public Page<TopicoDTO> listaTopicos(@RequestParam(required = false) String nomeCurso,
+                                        @PageableDefault(sort = "id", direction = Sort.Direction.ASC, page = 0, size = 10)
+                                        Pageable paginacao){
         if(nomeCurso == null){
-            List<Topico> topicos = topicoRepository.findAll();
+            Page<Topico> topicos = topicoRepository.findAll(paginacao);
             return TopicoDTO.converter(topicos);
         }else {
-            List<Topico> topicos = topicoRepository.findByCurso_Nome(nomeCurso);
+            Page<Topico> topicos = topicoRepository.findByCurso_Nome(nomeCurso, paginacao);
             return TopicoDTO.converter(topicos);
         }
     }
-
-    @PostMapping
-    @Transactional // "Avisa Ao Spring que deve comitar a transação ao final do metodo"
-    public ResponseEntity<TopicoDTO> cadastarTopico(@RequestBody @Valid
-                                                    TopicoForm topicoForm,
-                                                    UriComponentsBuilder uriBuilder){
-        Topico topico =  topicoForm.converter(cursoRepository);
-        topicoRepository.save(topico);
-        URI uri = uriBuilder.path("/topicos/{id}").buildAndExpand(topico.getId()).toUri();
-        return ResponseEntity.created(uri).body(new TopicoDTO(topico));
-    }
-
 
     @GetMapping("/{id}")
     public ResponseEntity<DetalhesTopicoDTO> detalhar(@PathVariable Long id) {
@@ -62,8 +58,22 @@ public class TopicosController {
 
     }
 
+    @PostMapping
+    @Transactional // "Avisa Ao Spring que deve comitar a transação ao final do metodo"
+    @CacheEvict(value = "listaTopicos", allEntries = true) //Limpa a memoria cache ao cadastrar um novo topico
+    public ResponseEntity<TopicoDTO> cadastarTopico(@RequestBody @Valid
+                                                    TopicoForm topicoForm,
+                                                    UriComponentsBuilder uriBuilder){
+        Topico topico =  topicoForm.converter(cursoRepository);
+        topicoRepository.save(topico);
+        URI uri = uriBuilder.path("/topicos/{id}").buildAndExpand(topico.getId()).toUri();
+        return ResponseEntity.created(uri).body(new TopicoDTO(topico));
+    }
+
+
     @PutMapping("/{id}")
     @Transactional // "Avisa Ao Spring que deve comitar a transação ao final do metodo"
+    @CacheEvict(value = "listaTopicos", allEntries = true) //Limpa a memoria cache ao cadastrar um novo topico
     public ResponseEntity<TopicoDTO> atualizar(@PathVariable Long id, @RequestBody @Valid
                                                AtualizacaoFormTopico formTopico ){
         if(topicoRepository.findById(id).isPresent()){
@@ -76,6 +86,7 @@ public class TopicosController {
 
     @DeleteMapping("/{id}")
     @Transactional // "Avisa Ao Spring que deve comitar a transação ao final do metodo"
+    @CacheEvict(value = "listaTopicos", allEntries = true) //Limpa a memoria cache ao cadastrar um novo topico
     public ResponseEntity<Any> remover(@PathVariable Long id){
         if (topicoRepository.findById(id).isPresent()) {
             topicoRepository.deleteById(id);
